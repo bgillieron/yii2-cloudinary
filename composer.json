@@ -1,5 +1,5 @@
 {
-    "name": "yourname/yii2-cloudinary",
+    "name": "bgillieron/yii2-cloudinary",
     "description": "Cloudinary integration for Yii2 framework",
     "type": "yii2-extension",
     "keywords": ["yii2", "cloudinary", "image", "upload"],
@@ -7,7 +7,7 @@
     "authors": [
       {
         "name": "Brendon Gilliéron",
-        "email": "you@example.com"
+        "email": "b.huka6@passmail.net"
       }
     ],
     "require": {
@@ -16,8 +16,13 @@
     },
     "autoload": {
       "psr-4": {
-        "yourname\\cloudinary\\": "src/"
+        "yii2cloudinary\\": "src/"
       }
+    },
+    "extra": {
+      "yii\\composer\\Installer::postInstall": [
+        "yii\\composer\\Callback::addYiiPath"
+      ]
     },
     "minimum-stability": "stable",
     "prefer-stable": true
