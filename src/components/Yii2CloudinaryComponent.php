@@ -357,13 +357,30 @@ class Yii2CloudinaryComponent extends Component
         $defaultTransform = implode(',', array_merge($baseTransform, ["w_{$maxWidth}"]));
         $defaultSrc = "{$base}/{$defaultTransform}/{$media->public_id}{$formatSuffix}";
 
+        $sizes = $htmlOptions['sizes'] ?? '(min-width: 768px) 33vw, 100vw';
+
+        $altText = '';
+        foreach ($media->descriptions as $desc) {
+            if ($desc->lang === Yii::$app->language && !empty($desc->description)) {
+                $altText = $desc->description;
+                break;
+            }
+        }
+        if ($altText === '') {
+            foreach ($media->descriptions as $desc) {
+                if (!empty($desc->description)) {
+                    $altText = $desc->description;
+                    break;
+                }
+            }
+        }
+
         $attrs = array_merge([
             'src' => $defaultSrc,
             'srcset' => implode(', ', $srcset),
-            'sizes' => $htmlOptions['sizes'] ?? '(min-width: 768px) 33vw, 100vw',
             'width' => $meta->width,
             'height' => $meta->height,
-            'alt' => $media->alt ?? '',
+            'alt' => $altText,
             'loading' => 'lazy',
         ], $htmlOptions);
 
@@ -375,7 +392,7 @@ class Yii2CloudinaryComponent extends Component
             $attrString .= " {$key}=\"{$escaped}\"";
         }
 
-        return "<img{$attrString} sizes=\"(min-width: 768px) 33vw, 100vw\">";
+        return "<img{$attrString} sizes=\"{$sizes}\">";
     }
 
 
