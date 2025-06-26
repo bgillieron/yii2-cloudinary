@@ -14,6 +14,7 @@ This extension provides a Yii2-friendly wrapper around the official [Cloudinary 
 - Migration-ready schema for media metadata and multilingual support
 - Built-in support for the Cloudinary Upload Widget
 - Modular routing support via Yii2 modules
+- Upload Widget localization with runtime overrides
 
 ---
 
@@ -45,6 +46,20 @@ Add the **module** and **component** to your application config:
         'apiKey' => 'your-api-key',
         'apiSecret' => 'your-api-secret',
         'uploadPreset' => 'your-upload-preset',
+    ],
+],
+```
+
+For production deployments you can pull credentials from environment variables:
+
+```php
+'components' => [
+    'yii2cloudinary' => [
+        'class' => \yii2cloudinary\components\Yii2CloudinaryComponent::class,
+        'cloudName' => getenv('CLOUDINARY_CLOUD_NAME'),
+        'apiKey' => getenv('CLOUDINARY_API_KEY'),
+        'apiSecret' => getenv('CLOUDINARY_API_SECRET'),
+        'uploadPreset' => getenv('CLOUDINARY_UPLOAD_PRESET'),
     ],
 ],
 ```
@@ -81,6 +96,13 @@ The widget will automatically:
 - Register required Cloudinary JS
 - Use your configured options or override via parameters
 - Trigger a default or custom callback to a controller (e.g. `/cloudinary/yii2-cloudinary/upload-handler`)
+
+### Displaying a Responsive Image
+
+```php
+$img = Yii::$app->yii2cloudinary->renderResponsiveImage($mediaModel, [400, 800], ['class' => 'img-fluid']);
+echo $img;
+```
 
 ---
 
@@ -119,6 +141,10 @@ yii2-cloudinary/
 ├── README.md
 └── LICENSE
 ```
+
+## 🌐 Upload Widget Localization
+
+See [upload-widget-localization.md](upload-widget-localization.md) for details on customizing widget translations or overriding text at runtime.
 
 ---
 
