@@ -1,25 +1,27 @@
-## 🌍 Upload Widget Localization (Language Support)
+# 🌍 Upload Widget Localization (Language Support)
 
 The `Yii2CloudinaryComponent` includes full support for multi-language localization of the Cloudinary Upload Widget via the `text` option.
 
-### 🧠 Localization Workflow
+---
+
+## 🧠 Localization Workflow
 
 1. **Default translations** in English are provided by the component (sourced from [Cloudinary's `text.json`](https://upload-widget.cloudinary.com/latest/global/text.json)):
 
-   ```
+   ```php
    vendor/yii2-cloudinary/src/messages/en/uploadWidget.php
    ```
 
 2. You can override or extend these translations by creating your own file in your application:
 
-   ```
+   ```php
    @app/messages/<lang>/uploadWidget.php
    ```
 
 3. The component merges both files using `array_replace_recursive()`.  
-   This means your app's file takes precedence and only needs to include the keys you wish to override.
+   Your app's file takes precedence and only needs to include the keys you wish to override.
 
-4. Translations are defined using dot-notation keys prefixed with `uploader.`.  
+4. Translations are defined using **dot-notation keys** prefixed with `uploader.`  
    These are automatically **flattened and nested** to match Cloudinary’s expected `text` structure.
 
    > Example: `'uploader.queue.title'` → becomes `$text['queue']['title']`
@@ -28,7 +30,7 @@ The `Yii2CloudinaryComponent` includes full support for multi-language localizat
 
 ---
 
-### 📦 Translation File Format
+## 📦 Translation File Format
 
 Create `messages/fr/uploadWidget.php` like this:
 
@@ -50,7 +52,7 @@ The component will:
 
 ---
 
-### 🧩 Runtime Text Overrides
+## 🧩 Runtime Text Overrides
 
 You can override specific translations at runtime when calling `uploadWidget()`:
 
@@ -70,39 +72,41 @@ Yii::$app->yii2cloudinary->uploadWidget('upload_widget', [
 ]);
 ```
 
-This is especially useful when you want to customize labels per context (e.g., per view, per role, or user locale).
+This array can be built programmatically to adapt labels per user or context.
 
-💡 You can also force a specific language via:
+💡 You can also force a specific language globally:
+
 ```php
 Yii::$app->language = 'fr';
 ```
 
 ---
 
-### 🔁 Fallback Behavior
+## 🔁 Fallback Behavior
 
 If no language file is found for the current `Yii::$app->language`,  
 the component will automatically fall back to its internal English (`en`) file.
 
 ---
 
-### ✅ Resolution Priority Summary
+## ✅ Resolution Priority Summary
 
 | Step | Source | Description |
 |------|--------|-------------|
 | 🥉 Step 1 | `@yii2cloudinary/messages/<lang>/uploadWidget.php` | Component's default translations for the current language (`<lang>`), or English (`en`) if not available. |
 | 🥈 Step 2 | `@app/messages/<lang>/uploadWidget.php` | Application-provided translations override the component's defaults. Only partial overrides are needed. |
-| 🥇 Step 3 | `uploadWidget()` `text` option | Explicit runtime overrides passed when calling `uploadWidget()`. Highest priority. |
+| 🥇 Step 3 | `uploadWidget()` `text` option | Explicit runtime overrides — highest priority. |
 
 This layered system provides maximum flexibility while ensuring sensible defaults for all languages.
 
 ---
 
-### 📊 Example: Translating `'uploader.queue.title'`
+## 📊 Example: Translating `'uploader.queue.title'`
 
 Let’s say you're translating the Upload Widget label for `'Upload Queue'`.
 
 #### 🥉 Step 1: Component Default (EN)
+
 ```php
 // vendor/yii2-cloudinary/src/messages/en/uploadWidget.php
 return [
@@ -111,6 +115,7 @@ return [
 ```
 
 #### 🥈 Step 2: User Override (FR)
+
 ```php
 // @app/messages/fr/uploadWidget.php
 return [
@@ -119,6 +124,7 @@ return [
 ```
 
 #### 🥇 Step 3: Runtime Override (in View or Controller)
+
 ```php
 Yii::$app->yii2cloudinary->uploadWidget('upload_widget', [
     'text' => [
@@ -130,9 +136,21 @@ Yii::$app->yii2cloudinary->uploadWidget('upload_widget', [
 ```
 
 #### ✅ Result:
+
 - If the current language is `fr`, and all 3 layers are in place:
   - ✅ The widget will display: **"File dynamique temporaire"**
 - If the runtime override is removed:
   - ✅ It will fall back to: **"File d’attente personnalisée"**
 - If neither override is provided:
   - ✅ It will fall back to: **"Upload Queue"**
+
+---
+
+## 📁 Reference: `text.json`
+
+This extension includes a copy of Cloudinary’s official Upload Widget language definitions  
+as `src/messages/text.json`. This file is used internally to generate the default  
+`uploadWidget.php` translation structure in English.
+
+> 🔒 You do not need to modify `text.json`.  
+> Instead, create or override translations in your application’s `messages/<lang>/uploadWidget.php`.

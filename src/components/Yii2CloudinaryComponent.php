@@ -24,6 +24,9 @@ class Yii2CloudinaryComponent extends Component
 
     private Cloudinary $cloudinary;
 
+    public array $relationSaverMap = [];
+
+
     private array $defaultWidgetOptions = [
         // Required (set dynamically in code)
         // 'cloudName' => '',
@@ -118,12 +121,26 @@ class Yii2CloudinaryComponent extends Component
         $this->cloudinary = new Cloudinary($config);
     }
 
-    public function upload(string $filePath, array $options = []): array
+public function upload(string $filePath, array $options = []): array
     {
-        $response = $this->cloudinary->uploadApi()->upload($filePath, $options);
+        // Extract the relationKey if present
+        $relationKey = $options['relationKey'] ?? null;
+
+        // Strip app-level keys before sending to Cloudinary
+        $cloudinaryOptions = $options;
+        unset($cloudinaryOptions['relationKey']);
+
+        $response = $this->cloudinary->uploadApi()->upload($filePath, $cloudinaryOptions);
         $data = $response->getArrayCopy();
 
-        $model = $this->saveUploadRecord($data, $options);
+        $relationSaver = null;
+        if ($relationKey && isset($this->relationSaverMap[$relationKey]) && is_callable($this->relationSaverMap[$relationKey])) {
+            $relationSaver = $this->relationSaverMap[$relationKey];
+        }
+
+        $model = $this->saveUploadRecord($data, [
+            'relationSaver' => $relationSaver,
+        ]);
 
         if ($model === null) {
             Yii::error([
@@ -137,6 +154,8 @@ class Yii2CloudinaryComponent extends Component
             'model' => $model,
         ];
     }
+
+
 
 
     public function getCloudinary(): Cloudinary
@@ -207,14 +226,23 @@ class Yii2CloudinaryComponent extends Component
         $jsonOptions = json_encode($options);
         $endpoint = $uploadHandlerUrl ?? $this->uploadHandlerUrl;
 
+        // Escape quotes if relationKey is set
+        $relationKey = $widgetOptions['relationKey'] ?? null;
+        $relationKeyJs = $relationKey !== null ? json_encode($relationKey) : 'null';
+
         $js = <<<JS
         var cloudinaryUploadWidget = cloudinary.createUploadWidget($jsonOptions, function(error, result) {
             if (!error && result && result.event === "success") {
                 console.log("Upload successful:", result.info);
+
+                const payload = Object.assign({}, result.info, {
+                    relationKey: $relationKeyJs
+                });
+
                 fetch('$endpoint', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(result.info)
+                    body: JSON.stringify(payload)
                 });
             }
         });
@@ -226,6 +254,7 @@ class Yii2CloudinaryComponent extends Component
 
         $view->registerJs($js, \yii\web\View::POS_END);
     }
+
 
 
     public function saveUploadRecord(array $data, array $options = []): ?CloudinaryMedia
@@ -256,6 +285,23 @@ class Yii2CloudinaryComponent extends Component
                 $transaction->rollBack();
                 return null;
             }
+
+            if (isset($options['relationSaver']) && is_callable($options['relationSaver'])) {
+                try {
+                    Yii::info("🛠 Calling relationSaver closure", 'yii2cloudinary.saveUploadRecord');
+                    call_user_func($options['relationSaver'], $media, $options);
+                } catch (\Throwable $e) {
+                    Yii::error([
+                        '❌ relationSaverException' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
+                        'data' => $data,
+                    ], 'yii2cloudinary.saveUploadRecord');
+
+                    $transaction->rollBack();
+                    return null;
+                }
+            }
+
 
             if (
                 isset($data['width'], $data['height'])
@@ -291,109 +337,139 @@ class Yii2CloudinaryComponent extends Component
 
     public function renderResponsiveImage(
         \yii2cloudinary\models\CloudinaryMedia $media,
-        array $widths = [400, 800, 1200],
+        array $widths = [],
         array $htmlOptions = [],
-        ?string $aspectRatio = null, // e.g. '1:1', '4:3'
-        string $format = 'auto'
+        ?string $aspectRatio = null,
+        string $format = 'auto',
+        string $return = 'img'
     ): string {
         $meta = $media->imageMeta ?? null;
 
-        if (!$meta || !$meta->width || !$meta->height || !$media->public_id || !$media->format) {
+        if (!$meta || !$meta->width || !$meta->height || !$media->public_id) {
             return '';
         }
 
         $cloudName = $this->cloudName ?? throw new \RuntimeException("Cloudinary cloud_name not set.");
-
         $base = "https://res.cloudinary.com/{$cloudName}/image/upload";
 
-        // Build Cloudinary transform: base is q_auto
-        $baseTransform = ['q_auto'];
+        $isPortrait = $meta->height > $meta->width;
+        $maxWidth = $meta->width;
+
+        // Determine responsive widths if not passed
+        if (empty($widths)) {
+            $targetMax = floor($maxWidth / 100) * 100;
+            $step = $isPortrait ? 200 : 300;
+            $minSize = $step * 2;
+
+            $widths = [];
+            for ($w = $targetMax; $w >= $minSize; $w -= $step) {
+                $widths[] = $w;
+            }
+            $widths = array_reverse($widths);
+            $widths[] = $targetMax;
+            $widths = array_unique(array_filter($widths, fn($w) => $w <= $meta->width)); // ✅ Prevent upscaling
+        }
+
+        // Build Cloudinary transformation
+        $transform = ['q_auto'];
+        $finalAspect = null;
 
         if ($aspectRatio) {
-            $baseTransform[] = 'ar_' . $aspectRatio;
-            $baseTransform[] = 'g_auto';
-            $baseTransform[] = 'c_fill';
+            $transform[] = 'ar_' . $aspectRatio;
+            $transform[] = 'g_auto';
+            $transform[] = 'c_fill';
+            $finalAspect = $aspectRatio;
         } else {
-            // auto aspect detection if width/height are set
-            if ($meta->width && $meta->height) {
-                if ($meta->width > $meta->height) {
-                    $baseTransform[] = 'ar_4:3';
-                } elseif ($meta->height > $meta->width) {
-                    $baseTransform[] = 'ar_3:4';
-                }
-                if ($meta->width !== $meta->height) {
-                    $baseTransform[] = 'g_auto';
-                    $baseTransform[] = 'c_fill';
-                } else {
-                    $baseTransform[] = 'c_scale'; // it's square already
-                }
+            if ($meta->width !== $meta->height) {
+                $transform[] = 'g_auto';
+                $transform[] = 'c_fill';
+                $finalAspect = $meta->width > $meta->height ? '4:3' : '3:4';
             } else {
-                $baseTransform[] = 'c_scale';
+                $transform[] = 'c_scale';
             }
         }
 
-
-        // Handle format logic
-        $formatExtension = null;
-
         if ($format === 'auto') {
-            $baseTransform[] = 'f_auto'; // smart browser format
-            $formatExtension = null;     // no extension
+            $transform[] = 'f_auto';
+            $ext = '';
         } else {
-            $baseTransform[] = "f_{$format}"; // e.g. f_webp
-            $formatExtension = $format;       // use explicit extension
+            $transform[] = 'f_' . $format;
+            $ext = '.' . $format;
         }
-        $formatSuffix = $formatExtension ? ".{$formatExtension}" : '';
-
 
         $srcset = [];
         foreach ($widths as $w) {
-            $transformStr = implode(',', array_merge($baseTransform, ["w_{$w}"]));
-            $url = "{$base}/{$transformStr}/{$media->public_id}{$formatSuffix}";
+            if ($w > $meta->width) {
+                continue; // 🚫 Skip widths larger than original image
+            }
+            $t = implode(',', array_merge($transform, ["w_{$w}"]));
+            $url = "{$base}/{$t}/{$media->public_id}{$ext}";
             $srcset[] = "{$url} {$w}w";
         }
 
-        $maxWidth = max($widths);
-        $defaultTransform = implode(',', array_merge($baseTransform, ["w_{$maxWidth}"]));
-        $defaultSrc = "{$base}/{$defaultTransform}/{$media->public_id}{$formatSuffix}";
+        // Use smallest width as fallback src
+        $defaultWidth = min($widths[0], $meta->width);
+        $defaultTransform = implode(',', array_merge($transform, ["w_{$defaultWidth}"]));
+        $defaultSrc = "{$base}/{$defaultTransform}/{$media->public_id}{$ext}";
 
-        $sizes = $htmlOptions['sizes'] ?? '(min-width: 768px) 33vw, 100vw';
+        // Calculate fallback dimensions
+        $scaledWidth = $defaultWidth;
+        if ($finalAspect) {
+            [$wRatio, $hRatio] = explode(':', $finalAspect);
+            $ratio = floatval($hRatio) / floatval($wRatio);
+            $scaledHeight = round($scaledWidth * $ratio);
+        } else {
+            $scale = $defaultWidth / $meta->width;
+            $scaledHeight = round($meta->height * $scale);
+        }
 
-        $altText = '';
+        // Build alt text from description
+        $alt = '';
         foreach ($media->descriptions as $desc) {
             if ($desc->lang === Yii::$app->language && !empty($desc->description)) {
-                $altText = $desc->description;
+                $alt = $desc->description;
                 break;
             }
         }
-        if ($altText === '') {
+        if ($alt === '') {
             foreach ($media->descriptions as $desc) {
                 if (!empty($desc->description)) {
-                    $altText = $desc->description;
+                    $alt = $desc->description;
                     break;
                 }
             }
         }
 
+        // HTML attributes
+        $sizes = $htmlOptions['sizes'] ?? null;
+        unset($htmlOptions['sizes']);
+
         $attrs = array_merge([
             'src' => $defaultSrc,
             'srcset' => implode(', ', $srcset),
-            'width' => $meta->width,
-            'height' => $meta->height,
-            'alt' => $altText,
+            'width' => $scaledWidth,
+            'height' => $scaledHeight,
+            'alt' => $alt,
             'loading' => 'lazy',
+            'style' => 'width:100%; height:auto; border-radius:6px;',
         ], $htmlOptions);
 
-        unset($attrs['sizes']); // remove override so we only render once below
-
         $attrString = '';
-        foreach ($attrs as $key => $value) {
-            $escaped = htmlspecialchars($value, ENT_QUOTES);
-            $attrString .= " {$key}=\"{$escaped}\"";
+        foreach ($attrs as $key => $val) {
+            $attrString .= ' ' . $key . '="' . htmlspecialchars($val, ENT_QUOTES) . '"';
         }
 
-        return "<img{$attrString} sizes=\"{$sizes}\">";
+        if ($sizes !== null) {
+            $attrString .= ' sizes="' . htmlspecialchars($sizes, ENT_QUOTES) . '"';
+        }
+
+        if ($return === 'srcset') {
+            return implode(', ', $srcset);
+        }
+        return "<img{$attrString}>";
     }
+
+
 
 
 

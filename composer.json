@@ -1,30 +1,37 @@
 {
-    "name": "bgillieron/yii2-cloudinary",
-    "description": "Cloudinary integration for Yii2 framework",
-    "type": "yii2-extension",
-    "keywords": ["yii2", "cloudinary", "image", "upload"],
-    "license": "MIT",
-    "authors": [
-      {
-        "name": "Brendon Gilliéron",
-        "email": "b.huka6@passmail.net"
-      }
-    ],
-    "require": {
-      "yiisoft/yii2": "~2.0.0",
-      "cloudinary/cloudinary_php": "^2.0"
-    },
-    "autoload": {
-      "psr-4": {
-        "yii2cloudinary\\": "src/"
-      }
-    },
-    "extra": {
-      "yii\\composer\\Installer::postInstall": [
-        "yii\\composer\\Callback::addYiiPath"
-      ]
-    },
-    "minimum-stability": "stable",
-    "prefer-stable": true
-  }
-  
+  "name": "bgillieron/yii2-cloudinary",
+  "description": "A Yii2-friendly wrapper for Cloudinary’s PHP SDK: upload widget, responsive images, and media management.",
+  "type": "yii2-extension",
+  "keywords": [
+    "yii2",
+    "cloudinary",
+    "image upload",
+    "responsive images",
+    "photoswipe",
+    "widget",
+    "media manager"
+  ],
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Brendon Gilliéron",
+      "email": "b.huka6@passmail.net"
+    }
+  ],
+  "require": {
+    "yiisoft/yii2": "~2.0.0",
+    "cloudinary/cloudinary_php": "^2.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "yii2cloudinary\\": "src/"
+    }
+  },
+  "extra": {
+    "yii\\composer\\Installer::postInstall": [
+      "yii\\composer\\Callback::addYiiPath"
+    ]
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

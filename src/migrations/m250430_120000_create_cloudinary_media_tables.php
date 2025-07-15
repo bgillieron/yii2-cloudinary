@@ -9,6 +9,7 @@ use yii\db\Migration;
  * - cloudinary_media (base values for all media, images, video, documents etc)
  * - cloudinary_media_desc (multilingual description for all media)
  * - cloudinary_image_meta (specific only to images)
+ * - cloudinary_media_relation (polymorphic relation to any model using model_class + model_pk_value)
  */
 class m250430_120000_create_cloudinary_media_tables extends Migration
 {
@@ -66,6 +67,7 @@ class m250430_120000_create_cloudinary_media_tables extends Migration
             'CASCADE',
             'CASCADE'
         );
+
     }
 
     public function safeDown()
