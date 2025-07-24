@@ -87,8 +87,8 @@ Stores localized titles and descriptions for each media item.
 | `id`                 | PK, int unsigned | Primary key |
 | `cloudinary_media_id`| FK, int unsigned | References `cloudinary_media(id)` |
 | `lang`               | string(5)        | Language code (`en`, `fr`, etc.) |
-| `title`              | string(100)      | Title of the media |
-| `description`        | string(200)      | Caption or description |
+| `title`              | string(255)      | Title of the media |
+| `description`        | text             | Caption or description |
 
 - On delete: `CASCADE` — descriptions are automatically removed if the parent media is deleted.
 

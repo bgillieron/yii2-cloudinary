@@ -85,6 +85,11 @@ echo Yii::$app->yii2cloudinary->renderResponsiveImage($media, [400, 800], [
 - Combine with CSS aspect-ratio utilities (e.g. Tailwind or custom classes).
 - Include `alt` and `title` attributes for accessibility and SEO.
 - Use the image meta table to store dimensions for orientation-based rendering.
+- Combine with `getTranslation()` to provide localized alt tags:
+
+```php
+'alt' => $media->getTranslation('title')
+```
 
 ---
 
@@ -121,9 +126,10 @@ The `$media` model should provide:
 For advanced scenarios:
 
 - Build Cloudinary URLs manually using:
-  ```php
-  Yii::$app->yii2cloudinary->getCloudinary()->image('public_id')->toUrl();
-  ```
+
+```php
+Yii::$app->yii2cloudinary->getCloudinary()->image('public_id')->toUrl();
+```
 
 - Or build your own `<img>` using `Html::img()` + custom `srcset`.
 

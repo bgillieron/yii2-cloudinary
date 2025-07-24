@@ -28,8 +28,8 @@ class CloudinaryMediaDesc extends ActiveRecord
             [['cloudinary_media_id', 'lang'], 'required'],
             [['cloudinary_media_id'], 'integer'],
             [['lang'], 'string', 'max' => 5],
-            [['title'], 'string', 'max' => 100],
-            [['description'], 'string', 'max' => 200],
+            [['title'], 'string', 'max' => 255],
+            [['description'], 'string'],
         ];
     }
 

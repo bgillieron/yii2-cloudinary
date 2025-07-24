@@ -68,7 +68,7 @@ Yii::$app->yii2cloudinary->uploadWidget('upload_widget', [
         'actions' => [
             'log_out' => 'Sign out',
         ],
-    ]
+    ],
 ]);
 ```
 
@@ -131,7 +131,7 @@ Yii::$app->yii2cloudinary->uploadWidget('upload_widget', [
         'queue' => [
             'title' => 'File dynamique temporaire',
         ],
-    ]
+    ],
 ]);
 ```
 
@@ -154,3 +154,23 @@ as `src/messages/text.json`. This file is used internally to generate the defaul
 
 > 🔒 You do not need to modify `text.json`.  
 > Instead, create or override translations in your application’s `messages/<lang>/uploadWidget.php`.
+
+---
+
+## 🛠️ Additional Options (Not for Localization)
+
+These options are passed to `uploadWidget()` but are unrelated to translation:
+
+- `customPayload`: Additional data to send back to your upload handler.
+- `reloadAfterClose`: If true, reloads the page when the widget is closed.
+
+```php
+Yii::$app->yii2cloudinary->uploadWidget('upload_widget', [
+    'text' => [...],
+    'customPayload' => [
+        'post_id' => 42,
+        'published' => true,
+    ],
+    'reloadAfterClose' => true,
+]);
+```

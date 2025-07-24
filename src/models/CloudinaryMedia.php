@@ -54,4 +54,18 @@ class CloudinaryMedia extends ActiveRecord
     {
         return $this->hasOne(CloudinaryImageMeta::class, ['cloudinary_media_id' => 'id']);
     }
+
+    public function getTranslation(string $attribute, ?string $language = null): ?string
+    {
+        $language = $language ?? \Yii::$app->language;
+
+        foreach ($this->descriptions as $desc) {
+            if ($desc->lang === $language) {
+                return $desc->{$attribute} ?? null;
+            }
+        }
+
+        return null;
+    }
+
 }

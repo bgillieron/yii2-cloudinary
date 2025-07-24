@@ -35,8 +35,8 @@ class m250430_120000_create_cloudinary_media_tables extends Migration
             'id' => $this->primaryKey()->unsigned(),
             'cloudinary_media_id' => $this->integer()->unsigned()->notNull(),
             'lang' => $this->string(5)->notNull(),
-            'title' => $this->string(100)->null(),
-            'description' => $this->string(200),
+            'title' => $this->string(255)->null(),
+            'description' => $this->text()->null(),
         ]);
 
         $this->addForeignKey(

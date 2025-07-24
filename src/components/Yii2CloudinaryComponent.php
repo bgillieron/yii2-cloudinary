@@ -26,7 +26,6 @@ class Yii2CloudinaryComponent extends Component
 
     public array $relationSaverMap = [];
 
-
     private array $defaultWidgetOptions = [
         // Required (set dynamically in code)
         // 'cloudName' => '',
@@ -121,31 +120,74 @@ class Yii2CloudinaryComponent extends Component
         $this->cloudinary = new Cloudinary($config);
     }
 
-public function upload(string $filePath, array $options = []): array
+    public function upload(string $filePath, array $options = []): array
     {
-        // Extract the relationKey if present
+        Yii::info([
+            'stage' => '📤 Upload initiated',
+            'filePath' => $filePath,
+            'options' => $options,
+        ], 'yii2cloudinary.upload');
+
         $relationKey = $options['relationKey'] ?? null;
+        $customPayload = $options['customPayload'] ?? [];
 
-        // Strip app-level keys before sending to Cloudinary
         $cloudinaryOptions = $options;
-        unset($cloudinaryOptions['relationKey']);
+        unset(
+            $cloudinaryOptions['relationKey'],
+            $cloudinaryOptions['customPayload']
+        );
 
-        $response = $this->cloudinary->uploadApi()->upload($filePath, $cloudinaryOptions);
-        $data = $response->getArrayCopy();
+        try {
+            $response = $this->cloudinary->uploadApi()->upload($filePath, $cloudinaryOptions);
+            $data = $response->getArrayCopy();
 
-        $relationSaver = null;
-        if ($relationKey && isset($this->relationSaverMap[$relationKey]) && is_callable($this->relationSaverMap[$relationKey])) {
-            $relationSaver = $this->relationSaverMap[$relationKey];
+            Yii::info([
+                'stage' => '✅ Upload to Cloudinary successful',
+                'cloudinaryResponse' => $data,
+            ], 'yii2cloudinary.upload');
+
+        } catch (\Throwable $e) {
+            Yii::error([
+                'uploadException' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ], 'yii2cloudinary.upload');
+
+            return [
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'exception' => get_class($e),
+            ];
+        }
+
+        $relationSaver = $relationKey ? ($this->relationSaverMap[$relationKey] ?? null) : null;
+
+        if ($relationKey && $relationSaver) {
+            Yii::info([
+                'stage' => '🧩 relationSaver resolved',
+                'relationKey' => $relationKey,
+            ], 'yii2cloudinary.upload');
+        } elseif ($relationKey) {
+            Yii::warning([
+                'stage' => '⚠️ relationSaver received but missing from config',
+                'relationKey' => $relationKey,
+            ], 'yii2cloudinary.upload');
         }
 
         $model = $this->saveUploadRecord($data, [
             'relationSaver' => $relationSaver,
+            'customPayload' => $customPayload,
         ]);
 
         if ($model === null) {
             Yii::error([
-                'uploadDbFailure' => 'Failed to save media record after Cloudinary upload.',
-                'data' => $data,
+                'stage' => '❌ DB persistence failed',
+                'cloudinaryData' => $data,
+                'customPayload' => $customPayload,
+            ], 'yii2cloudinary.upload');
+        } else {
+            Yii::info([
+                'stage' => '✅ Upload and DB persistence completed',
+                'media_id' => $model->id,
             ], 'yii2cloudinary.upload');
         }
 
@@ -154,9 +196,6 @@ public function upload(string $filePath, array $options = []): array
             'model' => $model,
         ];
     }
-
-
-
 
     public function getCloudinary(): Cloudinary
     {
@@ -213,6 +252,12 @@ public function upload(string $filePath, array $options = []): array
             ['position' => \yii\web\View::POS_HEAD]
         );
 
+        // Extract and remove special app-level options
+        $customPayload = $widgetOptions['customPayload'] ?? [];
+        $reloadAfterClose = $widgetOptions['reloadAfterClose'] ?? false;
+
+        unset($widgetOptions['customPayload'], $widgetOptions['reloadAfterClose']);
+
         $options = array_merge(
             [
                 'text' => $this->getUploadWidgetText(),
@@ -224,20 +269,22 @@ public function upload(string $filePath, array $options = []): array
         );
 
         $jsonOptions = json_encode($options);
+        $customJson = json_encode($customPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $endpoint = $uploadHandlerUrl ?? $this->uploadHandlerUrl;
 
-        // Escape quotes if relationKey is set
-        $relationKey = $widgetOptions['relationKey'] ?? null;
-        $relationKeyJs = $relationKey !== null ? json_encode($relationKey) : 'null';
+        $reloadSnippet = $reloadAfterClose ? <<<JS
+            else if (result && result.event === "close") {
+                console.log("🔁 Widget closed — reloading page.");
+                window.location.reload();
+            }
+        JS : '';
 
         $js = <<<JS
         var cloudinaryUploadWidget = cloudinary.createUploadWidget($jsonOptions, function(error, result) {
             if (!error && result && result.event === "success") {
-                console.log("Upload successful:", result.info);
+                console.log("✅ Upload successful:", result.info);
 
-                const payload = Object.assign({}, result.info, {
-                    relationKey: $relationKeyJs
-                });
+                const payload = Object.assign({}, result.info, $customJson);
 
                 fetch('$endpoint', {
                     method: 'POST',
@@ -245,6 +292,7 @@ public function upload(string $filePath, array $options = []): array
                     body: JSON.stringify(payload)
                 });
             }
+            $reloadSnippet
         });
 
         document.getElementById("$buttonId").addEventListener("click", function () {
@@ -254,7 +302,6 @@ public function upload(string $filePath, array $options = []): array
 
         $view->registerJs($js, \yii\web\View::POS_END);
     }
-
 
 
     public function saveUploadRecord(array $data, array $options = []): ?CloudinaryMedia
@@ -270,16 +317,22 @@ public function upload(string $filePath, array $options = []): array
             $media->version = $data['version'] ?? null;
             $media->secure_url = $data['secure_url'] ?? null;
 
-            $timestamp = isset($data['created_at']) ? (new \DateTime($data['created_at']))->format('Y-m-d H:i:s') : date('Y-m-d H:i:s');
+            $timestamp = isset($data['created_at'])
+                ? (new \DateTime($data['created_at']))->format('Y-m-d H:i:s')
+                : date('Y-m-d H:i:s');
+
             $media->created_at = $timestamp;
             $media->updated_at = $timestamp;
 
-            $media->order = $options['order'] ?? $this->db_defaultOrder;
-            $media->published = $options['published'] ?? $this->db_defaultPublished;
+            $customPayload = $options['customPayload'] ?? [];
+
+            $media->order = $customPayload['order'] ?? $this->db_defaultOrder;
+            $media->published = $customPayload['published'] ?? $this->db_defaultPublished;
 
             if (!$media->save()) {
                 Yii::error([
-                    'saveMediaError' => $media->getErrors(),
+                    'stage' => '❌ Saving CloudinaryMedia failed',
+                    'errors' => $media->getErrors(),
                     'data' => $data,
                 ], 'yii2cloudinary.saveUploadRecord');
                 $transaction->rollBack();
@@ -288,20 +341,24 @@ public function upload(string $filePath, array $options = []): array
 
             if (isset($options['relationSaver']) && is_callable($options['relationSaver'])) {
                 try {
-                    Yii::info("🛠 Calling relationSaver closure", 'yii2cloudinary.saveUploadRecord');
-                    call_user_func($options['relationSaver'], $media, $options);
+                    Yii::info([
+                        'stage' => '🛠 Calling relationSaver',
+                        'media_id' => $media->id,
+                        'customPayload' => $customPayload,
+                    ], 'yii2cloudinary.saveUploadRecord');
+
+                    call_user_func($options['relationSaver'], $media, $customPayload);
                 } catch (\Throwable $e) {
                     Yii::error([
-                        '❌ relationSaverException' => $e->getMessage(),
+                        'stage' => '❌ relationSaver exception',
+                        'error' => $e->getMessage(),
                         'trace' => $e->getTraceAsString(),
                         'data' => $data,
                     ], 'yii2cloudinary.saveUploadRecord');
-
                     $transaction->rollBack();
                     return null;
                 }
             }
-
 
             if (
                 isset($data['width'], $data['height'])
@@ -314,7 +371,8 @@ public function upload(string $filePath, array $options = []): array
 
                 if (!$image->save()) {
                     Yii::error([
-                        'saveImageMetaError' => $image->getErrors(),
+                        'stage' => '❌ Saving CloudinaryImageMeta failed',
+                        'errors' => $image->getErrors(),
                         'data' => $data,
                     ], 'yii2cloudinary.saveUploadRecord');
                     $transaction->rollBack();
@@ -323,12 +381,18 @@ public function upload(string $filePath, array $options = []): array
             }
 
             $transaction->commit();
+            Yii::info([
+                'stage' => '✅ Upload record saved successfully',
+                'media_id' => $media->id,
+            ], 'yii2cloudinary.saveUploadRecord');
+
             return $media;
 
         } catch (\Throwable $e) {
             $transaction->rollBack();
             Yii::error([
-                'uploadDbException' => $e->getMessage(),
+                'stage' => '❌ Unexpected DB exception',
+                'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ], 'yii2cloudinary.saveUploadRecord');
             return null;
@@ -468,9 +532,5 @@ public function upload(string $filePath, array $options = []): array
         }
         return "<img{$attrString}>";
     }
-
-
-
-
 
 }

@@ -136,6 +136,25 @@ This method:
 - Saves the `cloudinary_media` record
 - If `relationKey` is provided and defined in your config, invokes the matching relation handler
 
+### 🔄 Uploading with Custom Payload
+
+You can pass extra metadata to control how the upload is saved:
+
+```php
+Yii::$app->yii2cloudinary->upload('/path/to/image.jpg', [
+    'folder' => 'product-images',
+    'customPayload' => [
+        'order' => 1,
+        'published' => true,
+        'product_id' => 123,
+    ],
+    'relationKey' => 'product-gallery',
+]);
+```
+
+- `customPayload` is forwarded to both the database save and your `relationSaverMap` callback.
+- This allows custom logic or model relation setup based on the upload context.
+
 ---
 
 ### 🔁 Saving Upload Result & Creating Relations
@@ -154,19 +173,17 @@ To keep your application logic clean and flexible, this extension introduces the
 
 ```php
 'relationSaverMap' => [
-    'product-gallery' => function ($media) {
+    'product-gallery' => function ($media, $payload) {
         Yii::$app->db->createCommand()->insert('product_media', [
             'media_id' => $media->id,
-            'product_id' => 123,
-            'position' => 1,
+            'product_id' => $payload['product_id'] ?? null,
+            'position' => $payload['order'] ?? 1,
         ])->execute();
     },
     'user-avatar' => fn($media) => Yii::$app->user->identity->link('avatar', $media),
     'post-image' => fn($media) => Post::findOne(5)->link('media', $media),
 ],
 ```
-
-Each callable will be invoked automatically after a successful upload, only if the `relationKey` matches.
 
 ---
 
@@ -193,7 +210,13 @@ echo Yii::$app->yii2cloudinary->renderResponsiveImage($media, [400, 800], [
 
 ```php
 Yii::$app->yii2cloudinary->uploadWidget('upload_widget', [
-    'relationKey' => 'test-widget', // 👈 this triggers your configured relationSaverMap callback
+    'relationKey' => 'product-gallery',
+    'customPayload' => [
+        'product_id' => 123,
+        'order' => 1,
+        'published' => true,
+    ],
+    'reloadAfterClose' => true,
 ]);
 ```
 
@@ -204,9 +227,9 @@ Key behaviors:
 - Automatically registers and loads Cloudinary’s JavaScript dependencies
 - Uploads files to Cloudinary and sends metadata to your configured `uploadHandlerUrl` endpoint, which persists the media and optionally links it using your `relationSaverMap`
 - If a `relationKey` is passed, it is forwarded to the server to trigger a matching callback from your `relationSaverMap`
+- `customPayload` is included in the upload metadata for advanced save logic
+- `reloadAfterClose` reloads the page when the widget is closed (optional)
 - You can also pass `text` overrides for localization
-
-📎 To attach uploaded media to a model, define your relation logic in `relationSaverMap`, and refer to it using `relationKey`.
 
 ---
 
@@ -305,5 +328,5 @@ These models support multilingual metadata and responsive rendering:
 
 ## 📝 License
 
-MIT License  
+MIT License
 © Brendon Gilliéron
